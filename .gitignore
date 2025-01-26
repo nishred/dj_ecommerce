@@ -1,0 +1,5 @@
+.env
+notes/
+db.sqlite3
+
+eCommerce/__pycache__/
