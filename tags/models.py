@@ -14,8 +14,6 @@ class TaggedItemManager(models.Manager):
        return TaggedItem.objects.filter(content_type = content_type,object_id = obj_id)
 
 
-
-
 class Tag(models.Model):
 
     label = models.CharField(max_length=255)

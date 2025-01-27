@@ -81,16 +81,23 @@ WSGI_APPLICATION = 'eCommerce.wsgi.application'
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
 
 
+default = {
+
+ 
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': config("DB_NAME"), 
+        'USER': config("DB_USER"), 
+        'PASSWORD': config("DB_PASSWORD"), 
+        'HOST': config("DB_HOST"),  
+        'PORT': config("DB_PORT"),  
+
+}
+
+
+
 DATABASES = {
 
-     'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': config("DB_NAME"),  # Replace with your dbname
-        'USER': config("DB_USER"),  # Replace with your username
-        'PASSWORD': config("DB_PASSWORD"),  # Replace with your password
-        'HOST': config("DB_HOST"),  # Replace with your hostname (e.g., 'localhost')
-        'PORT': config("DB_HOST"),  # Replace with your port (e.g., '5432')
-    }
+  "default" : default
 
 
 }
