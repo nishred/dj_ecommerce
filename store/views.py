@@ -2,19 +2,36 @@ from django.shortcuts import render
 from django.http import HttpResponse, JsonResponse
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
+from .pagination import CustomPageNumberPagination
+
+from django_filters.rest_framework import DjangoFilterBackend
 
 from rest_framework.generics import ListCreateAPIView, RetrieveUpdateDestroyAPIView
 
 from rest_framework.views import APIView
 
-from rest_framework.viewsets import ModelViewSet
+from rest_framework.filters import SearchFilter, OrderingFilter
+
+from rest_framework.mixins import (
+    CreateModelMixin,
+    RetrieveModelMixin,
+    DestroyModelMixin,
+)
+
+from rest_framework.viewsets import ModelViewSet, GenericViewSet
 
 from django.db.models import Count
 
 from rest_framework import status
 
-from .models import Product, Collection, Review
-from .serializers import ProductSerializer, CollectionSerializer, ReviewSerializer
+from .models import Product, Collection, Review, Cart, CartItem
+from .serializers import (
+    ProductSerializer,
+    CollectionSerializer,
+    ReviewSerializer,
+    CartSerializer,
+    CartItemSerializer,
+)
 
 # Create your views here.
 
@@ -29,8 +46,25 @@ from .serializers import ProductSerializer, CollectionSerializer, ReviewSerializ
 class ProductViewSet(ModelViewSet):
 
     queryset = Product.objects.all()
-
     serializer_class = ProductSerializer
+    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
+    filterset_fields = ["collection_id"]
+    # you can even add related fields here
+    search_fields = ["title", "description", "collection__title"]
+
+    ordering_fields = ["unit_price", "last_update"]
+    pagination_class = CustomPageNumberPagination
+
+    # def get_queryset(self):
+
+    #     queryset = Product.objects.all()
+
+    #     collection_id = self.request.query_params.get("collection_id")
+
+    #     if collection_id is not None:
+    #         queryset = queryset.filter(collection_id=collection_id)
+
+    #     return queryset
 
     def get_serializer_context(self):
         return {"context": self.request}
@@ -130,6 +164,99 @@ class ReviewViewSet(ModelViewSet):
 
     def get_serializer_context(self):
         return {"product_id": self.kwargs["product_pk"]}
+
+
+class CartViewSet(
+    CreateModelMixin, GenericViewSet, RetrieveModelMixin, DestroyModelMixin
+):
+
+    # for each item you want to prefetch the product as well
+
+    queryset = Cart.objects.prefetch_related("items__product").all()
+
+    serializer_class = CartSerializer
+
+
+class CartItemViewSet(ModelViewSet):
+
+    serializer_class = CartItemSerializer
+
+    def get_queryset(self):
+        cart_id = self.kwargs.get("cart_pk")
+
+        return CartItem.objects.select_related("product").filter(cart_id=cart_id)
+
+    def perform_create(self, serializer):
+        cart_id = self.kwargs.get("cart_pk")
+
+        serializer.save(cart_id=cart_id)
+
+    def update(self, request, *args, **kwargs):
+
+        cartitem = self.get_object()
+
+        serializer = self.get_serializer(cartitem, data=request.data)
+
+        if serializer.is_valid():
+            serializer.save()
+            return Response({"success": True, "data": serializer.validated_data})
+        else:
+            return Response({"success": False, "errors": serializer.errors})
+
+
+# class CartItemViewSet(ModelViewSet):
+#     http_method_names = ["get", "post", "patch", "delete"]
+
+#     def get_serializer_class(self):
+#         if self.request.method == "POST":
+#             return AddCartItemSerializer
+#         elif self.request.method == "PATCH":
+#             return UpdateCartItemSerializer
+#         return CartItemSerializer
+
+#     def get_serializer_context(self):
+#         return {"cart_id": self.kwargs["cart_pk"]}
+
+#     def get_queryset(self):
+#         return CartItem.objects.filter(cart_id=self.kwargs["cart_pk"]).select_related(
+#             "product"
+#         )
+
+
+# class AddCartItemSerializer(serializers.ModelSerializer):
+#     product_id = serializers.IntegerField()
+
+#     def validate_product_id(self, value):
+#         if not Product.objects.filter(pk=value).exists():
+#             raise serializers.ValidationError("No product with the given ID was found.")
+#         return value
+
+#     def save(self, **kwargs):
+#         cart_id = self.context["cart_id"]
+#         product_id = self.validated_data["product_id"]
+#         quantity = self.validated_data["quantity"]
+
+#         try:
+#             cart_item = CartItem.objects.get(cart_id=cart_id, product_id=product_id)
+#             cart_item.quantity += quantity
+#             cart_item.save()
+#             self.instance = cart_item
+#         except CartItem.DoesNotExist:
+#             self.instance = CartItem.objects.create(
+#                 cart_id=cart_id, **self.validated_data
+#             )
+
+#         return self.instance
+
+#     class Meta:
+#         model = CartItem
+#         fields = ["id", "product_id", "quantity"]
+
+
+# class UpdateCartItemSerializer(serializers.ModelSerializer):
+#     class Meta:
+#         model = CartItem
+#         fields = ["quantity"]
 
 
 class ProductList(ListCreateAPIView):
@@ -400,5 +527,3 @@ def collection_detail(request, id):
 
     except Exception as e:
         return Response({"success": False, "error": str(e)})
-
-

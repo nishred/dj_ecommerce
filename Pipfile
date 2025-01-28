@@ -9,6 +9,10 @@ psycopg2 = "*"
 djangorestframework = "*"
 python-decouple = "*"
 drf-nested-routers = "*"
+djoser = "*"
+djangorestframework-simplejwt = "*"
+django-filter = "*"
+django-debug-toolbar = "*"
 
 [dev-packages]
 

@@ -1,10 +1,10 @@
 from rest_framework import serializers
 
-from .models import Product,Collection,Review
+from .models import Product,Collection,Review, Cart, CartItem
 
 from decimal import Decimal 
 
-#A model is the internal representation of a resource stored in the db and a serializer is the external representation of a resource exposed to the external world
+# A model is the internal representation of a resource stored in the db and a serializer is the external representation of a resource exposed to the external world
 
 # DB model(model) vs API model(serializer)
 
@@ -26,7 +26,7 @@ class CollectionSerializer(serializers.ModelSerializer):
       # def get_product_count(self,collection: Collection):
 
       #       return collection.products.all().count()      
-         
+
 
 # class ProductSerializer(serializers.Serializer):
 
@@ -37,17 +37,17 @@ class CollectionSerializer(serializers.ModelSerializer):
 #         collection = CollectionSerializer()
 
 #         def calculate_tax(self,product: Product):
-#             return product.unit_price * Decimal(1.1)           
+#             return product.unit_price * Decimal(1.1)
 
 # the serializer is a class that is used to convert complex data types like query sets and model instances to native python data types that can be dueasily rendered into json,xml or other content types
 
 # read-only fields are only used for output(serialization)
 # The write-only fields are only used for input(deserialization)
 # read-write fields are used for both output and input
-# method fields are only used for output 
+# method fields are only used for output
 # method_field = serializers.SerializerMethodField(method_name = "pendu")
 
-# In Django REST Framework (DRF), all fields that are explicitly defined in the serializer class (whether they are read-only, write-only, or read-write) must be included in the fields list in the Meta class. 
+# In Django REST Framework (DRF), all fields that are explicitly defined in the serializer class (whether they are read-only, write-only, or read-write) must be included in the fields list in the Meta class.
 
 class ProductSerializer(serializers.ModelSerializer):
       class Meta:
@@ -78,7 +78,7 @@ class ProductSerializer(serializers.ModelSerializer):
 
 
       #responsible for updating an existing instance given the validated data
-      
+
 
 #       def update(self, instance, validated_data):
 #     """
@@ -96,28 +96,83 @@ class ProductSerializer(serializers.ModelSerializer):
 #     instance.save()
 
 #     return instance
-              
+
 
 class ReviewSerializer(serializers.ModelSerializer):
 
-      class Meta:
-            model = Review
-            fields = ["id","name","description","product_id","date","product"]
+    class Meta:
+        model = Review
+        fields = ["id","name","description","product_id","date","product"]
 
-
-      # enforcing the referential intergrity constraints at the api level
-      product_id = serializers.PrimaryKeyRelatedField(
+    # enforcing the referential intergrity constraints at the api level
+    product_id = serializers.PrimaryKeyRelatedField(
 
                   write_only = True,
                   queryset = Product.objects.all(),
                   source = "product"
             )
-      
-      product = ProductSerializer(read_only = True)
-      
-      
-      def create(self, validated_data):
-            review = Review.objects.create(product_id = self.context["product_id"],**validated_data)
-            return review
 
-      
+    product = ProductSerializer(read_only = True)
+
+    def create(self, validated_data):
+        review = Review.objects.create(product_id = self.context["product_id"],**validated_data)
+        return review
+
+
+class CartItemSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = CartItem
+        fields = ["id", "product_id", "product", "quantity", "total_price"]
+
+    id = serializers.UUIDField(read_only=True)
+
+    total_price = serializers.SerializerMethodField(
+        read_only=True, method_name="get_total_price"
+    )
+
+    product_id = serializers.PrimaryKeyRelatedField(
+        queryset=Product.objects.all(),
+        source="product",
+        write_only=True,
+        required=False,
+    )
+
+    product = ProductSerializer(read_only=True)
+
+    # self.instance is the model instance
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if not self.instance:
+            self.fields["product_id"].required = True
+
+    def get_total_price(self, cartitem: CartItem):
+
+        return cartitem.quantity * cartitem.product.unit_price
+
+
+class CartSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = Cart
+        fields = ["id", "created_at", "total_price", "items"]
+
+    id = serializers.UUIDField(read_only=True)
+
+    total_price = serializers.SerializerMethodField(
+        method_name="get_total_price", read_only=True
+    )
+
+    items = CartItemSerializer(many=True, read_only=True)
+
+    def get_total_price(self, cart: Cart):
+
+        total_price = 0
+
+        items = cart.items.all()
+
+        for item in items:
+            item_price = item.quantity * item.product.unit_price
+            total_price += item_price
+        return total_price

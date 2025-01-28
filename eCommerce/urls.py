@@ -16,10 +16,16 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path,include
+from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
+
+from debug_toolbar.toolbar import debug_toolbar_urls
+
 
 urlpatterns = [
-    path('admin/', admin.site.urls),
-    path("playground/",include("playground.urls")),
-    path("store/",include("store.urls"))
-                               
-]
+    path("admin/", admin.site.urls),
+    path("playground/", include("playground.urls")),
+    path("store/", include("store.urls")),
+    path("auth/", include("djoser.urls")),
+    path("auth/jwt/create/", TokenObtainPairView.as_view(), name="jwt_create"),
+    path("auth/jwt/refresh/", TokenRefreshView.as_view(), name="jwt_refresh"),
+] + debug_toolbar_urls()
