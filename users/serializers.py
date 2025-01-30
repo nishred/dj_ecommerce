@@ -1,7 +1,6 @@
 from djoser.serializers import UserCreateSerializer as BaseUserCreateSerializer
 from django.contrib.auth import get_user_model
-
-
+from rest_framework import serializers
 from .models import CustomUser
 
 User = get_user_model()
@@ -16,5 +15,8 @@ class UserCreateSerializer(BaseUserCreateSerializer):
             'password': {'write_only': True}
         }
 
+
     def create(self, validated_data):
         return CustomUser.objects.create_user(**validated_data)
+
+

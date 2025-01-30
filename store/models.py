@@ -63,6 +63,8 @@ class Customer(models.Model):
         (MEMBERSHIP_SILVER, 'Silver'),
         (MEMBERSHIP_GOLD, 'Gold'),
     ]
+
+
     phone = models.CharField(max_length=255)
     birth_date = models.DateField(null=True, blank=True)
     membership = models.CharField(
@@ -152,3 +154,7 @@ class Review(models.Model):
 
 # An id field that is a primary key will automatically be added to every model in django   
 # If you have created your own field that is a primary key, django wont create one for you
+
+
+
+

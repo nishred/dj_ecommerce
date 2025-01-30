@@ -1,8 +1,17 @@
 from rest_framework import serializers
 
-from .models import Product,Collection,Review, Cart, CartItem
+from .models import Product,Collection,Review, Cart, CartItem, Customer, OrderItem, Order
 
-from decimal import Decimal 
+from django.db import transaction
+
+from django.conf import settings
+
+from decimal import Decimal
+
+from django.contrib.auth import get_user_model
+
+
+User = get_user_model()
 
 # A model is the internal representation of a resource stored in the db and a serializer is the external representation of a resource exposed to the external world
 
@@ -148,7 +157,6 @@ class CartItemSerializer(serializers.ModelSerializer):
             self.fields["product_id"].required = True
 
     def get_total_price(self, cartitem: CartItem):
-
         return cartitem.quantity * cartitem.product.unit_price
 
 
@@ -163,6 +171,8 @@ class CartSerializer(serializers.ModelSerializer):
     total_price = serializers.SerializerMethodField(
         method_name="get_total_price", read_only=True
     )
+    
+    created_at = serializers.DateTimeField(read_only = True)
 
     items = CartItemSerializer(many=True, read_only=True)
 
@@ -176,3 +186,100 @@ class CartSerializer(serializers.ModelSerializer):
             item_price = item.quantity * item.product.unit_price
             total_price += item_price
         return total_price
+
+
+class CustomerSerializer(serializers.ModelSerializer):
+     
+    class Meta:
+         model  = Customer
+         fields = ["id","birth_date","membership","phone"]
+
+
+    id = serializers.IntegerField(read_only = True)    
+
+
+
+class OrderItemSerializer(serializers.ModelSerializer):
+     class Meta:
+          model = OrderItem
+          fields = ["id","product_id","quantity","unit_price","product"]
+
+     product_id = serializers.PrimaryKeyRelatedField(
+           queryset = Product.objects.all(),
+           source = "product",
+           write_only = True
+     )     
+
+     product = ProductSerializer(read_only = True)
+
+     id = serializers.IntegerField(read_only = True)
+
+
+
+class OrderSerializer(serializers.ModelSerializer):
+     
+     class Meta:
+          model = Order
+          fields = ["id","payment_status","items","placed_at","customer"]
+
+     placed_at = serializers.DateTimeField(read_only = True)   
+
+     items = OrderItemSerializer(many = True, read_only = True) 
+
+     id = serializers.IntegerField(read_only = True)
+
+     customer = CustomerSerializer(read_only = True)
+ 
+
+     def save(self, **kwargs):
+          
+          print("save arguments",kwargs)  
+          return super().save(**kwargs)    
+
+     def create(self, validated_data):
+          print("validated data",validated_data)
+
+          return super().create(validated_data)
+
+class UpdateOrderSerializer(serializers.ModelSerializer):
+
+     class Meta:
+          model = Order
+          fields = ["payment_status"]     
+
+
+class CreateOrderSerializer(serializers.Serializer):
+   
+      cart_id = serializers.UUIDField()
+
+      def validate_cart_id(self,value):
+           if not Cart.objects.filter(pk = value).exists():
+                raise serializers.ValidationError("Cart doesnt exist")
+           else:
+                return value
+
+
+      def create(self, validated_data):
+
+                print("Validated data",validated_data)
+                
+                cart_id = validated_data.get("cart_id")  
+                customer_id = validated_data.get("customer_id")
+
+                print("customer details",customer_id)
+
+                cart = Cart.objects.get(pk = cart_id)
+
+                with transaction.atomic():
+                     
+                     order = Order.objects.create(customer_id = customer_id)
+
+                     cartitems = cart.items.all()
+
+                     for item in cartitems:     
+                          order.items.create(order_id = order.id,product_id = item.product_id,quantity = item.quantity,unit_price = item.product.unit_price)
+
+                     cart.delete()
+
+                     return order     
+                

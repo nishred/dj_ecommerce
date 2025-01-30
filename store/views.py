@@ -3,20 +3,20 @@ from django.http import HttpResponse, JsonResponse
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from .pagination import CustomPageNumberPagination
-
+from rest_framework.decorators import action
 from django_filters.rest_framework import DjangoFilterBackend
-
 from rest_framework.generics import ListCreateAPIView, RetrieveUpdateDestroyAPIView
-
 from rest_framework.views import APIView
-
 from rest_framework.filters import SearchFilter, OrderingFilter
-
 from rest_framework.mixins import (
     CreateModelMixin,
     RetrieveModelMixin,
     DestroyModelMixin,
+    UpdateModelMixin,
+    ListModelMixin
 )
+
+from rest_framework.permissions import IsAuthenticated
 
 from rest_framework.viewsets import ModelViewSet, GenericViewSet
 
@@ -24,13 +24,18 @@ from django.db.models import Count
 
 from rest_framework import status
 
-from .models import Product, Collection, Review, Cart, CartItem
+from .models import Product, Collection, Review, Cart, CartItem, Customer, OrderItem, Order
 from .serializers import (
     ProductSerializer,
     CollectionSerializer,
     ReviewSerializer,
     CartSerializer,
     CartItemSerializer,
+    CustomerSerializer,
+    OrderItemSerializer,
+    OrderSerializer,
+    UpdateOrderSerializer,
+    CreateOrderSerializer
 )
 
 # Create your views here.
@@ -165,21 +170,23 @@ class ReviewViewSet(ModelViewSet):
     def get_serializer_context(self):
         return {"product_id": self.kwargs["product_pk"]}
 
+# when we are creating a new order, all we need to send to the server is just the cart_id
 
 class CartViewSet(
     CreateModelMixin, GenericViewSet, RetrieveModelMixin, DestroyModelMixin
 ):
 
     # for each item you want to prefetch the product as well
-
     queryset = Cart.objects.prefetch_related("items__product").all()
 
     serializer_class = CartSerializer
 
 
+
 class CartItemViewSet(ModelViewSet):
 
     serializer_class = CartItemSerializer
+
 
     def get_queryset(self):
         cart_id = self.kwargs.get("cart_pk")
@@ -202,6 +209,135 @@ class CartItemViewSet(ModelViewSet):
             return Response({"success": True, "data": serializer.validated_data})
         else:
             return Response({"success": False, "errors": serializer.errors})
+
+
+class CustomerViewSet(CreateModelMixin,UpdateModelMixin,RetrieveModelMixin,GenericViewSet):
+
+      serializer_class = CustomerSerializer
+      queryset = Customer.objects.all()
+
+      permission_classes = [IsAuthenticated]
+
+      # if detail is set to false, the action is available on the list view /customers/me
+
+      # if detail is set to true, the action will be available on the detail view /customers/pk/true
+   
+      # The request.user will be populated with the User model instance by the auth middleware
+
+
+      def perform_create(self, serializer):
+          serializer.save(user_id = self.request.user.id)
+
+      @action(detail=False,methods=["PUT","GET"])
+      def me(self,request):
+         
+         try:
+              
+            customer = Customer.objects.get(user_id = request.user.id)
+
+            print("customer",customer)
+
+            if request.method == "GET":
+                serializer = self.get_serializer(customer)
+
+                return Response({
+                   "success" : True,
+                   "customer" : serializer.data
+
+                })
+
+            elif request.method == "PUT":
+                serializer = self.get_serializer(customer,data = request.data)
+
+                if serializer.is_valid():
+                    serializer.save()
+                    return Response({
+                        "success" : True,
+                        "customer" : serializer.validated_data
+                    })
+                else:
+                    return Response({
+                      "success" : False,
+                      "errors" : serializer.errors
+                 
+                    })
+         except Exception as e:  
+             return Response({
+                 "success" : False,
+                 "error" : str(e)
+             })
+    
+
+class OrderItemViewSet(ModelViewSet):
+
+    serializer_class = OrderItemSerializer
+
+    def get_queryset(self):
+        order_id = self.kwargs.get("order_pk")
+
+        return OrderItem.objects.filter(order_id = order_id)
+    
+    def update(self, request, *args, **kwargs):
+
+        try:
+            instance = self.get_object()
+            serializer = self.get_serializer(instance,data = request.data,partial = True)
+
+            if serializer.is_valid():
+                serializer.save()
+                return Response({
+                    "success" : True,
+                    "data" : serializer.validated_data
+                })    
+            else:
+                return Response({
+                    "success" : False,
+                    "errors" : serializer.errors
+                })
+        except Exception as e:
+            return Response({
+                "success" : False,
+                "error" : str(e)
+            })    
+
+class OrderViewSet(ListModelMixin,CreateModelMixin,RetrieveModelMixin,DestroyModelMixin,GenericViewSet):
+
+
+    permission_classes = [IsAuthenticated]
+
+
+    def create(self, request, *args, **kwargs):
+       serializer = self.get_serializer(data = request.data)
+       
+       if serializer.is_valid():
+           self.perform_create(serializer = serializer)
+           response_serializer = OrderSerializer(serializer.instance)
+
+           return Response({
+               "success" : True,
+               "order" : response_serializer.data
+             })
+
+
+    def get_serializer_class(self):
+        if self.request.method == "PATCH":
+            return UpdateOrderSerializer
+        elif self.request.method == "GET":
+            return OrderSerializer
+        elif self.request.method == "POST":
+            return CreateOrderSerializer
+
+    def get_queryset(self):
+
+        customer = Customer.objects.get(user_id = self.request.user.id)
+        return Order.objects.filter(customer_id = customer.id)
+
+
+    def perform_create(self, serializer):
+
+        customer = Customer.objects.get(user_id = self.request.user.id)
+        print("customer",customer.id)
+        serializer.save(customer_id = customer.id)
 
 
 # class CartItemViewSet(ModelViewSet):
@@ -297,6 +433,8 @@ class ProductDetail(RetrieveUpdateDestroyAPIView):
                 return Response({"success": True})
         except Exception as e:
             return Response({"success": False})
+
+
 
 
 # class ProductDetail(APIView):
@@ -527,3 +665,8 @@ def collection_detail(request, id):
 
     except Exception as e:
         return Response({"success": False, "error": str(e)})
+
+
+
+
+
