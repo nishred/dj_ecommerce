@@ -10,6 +10,8 @@ from decimal import Decimal
 
 from django.contrib.auth import get_user_model
 
+from .signals import order_created
+
 
 User = get_user_model()
 
@@ -222,13 +224,21 @@ class OrderSerializer(serializers.ModelSerializer):
           model = Order
           fields = ["id","payment_status","items","placed_at","customer"]
 
-     placed_at = serializers.DateTimeField(read_only = True)   
+     placed_at = serializers.DateTimeField(read_only = True,required = False)   
+
+     payment_status = serializers.CharField(required = False)
 
      items = OrderItemSerializer(many = True, read_only = True) 
 
      id = serializers.IntegerField(read_only = True)
 
      customer = CustomerSerializer(read_only = True)
+
+
+     def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if not self.instance:
+            self.fields["payment_status"].required = True
  
 
      def save(self, **kwargs):
@@ -240,6 +250,9 @@ class OrderSerializer(serializers.ModelSerializer):
           print("validated data",validated_data)
 
           return super().create(validated_data)
+     
+
+
 
 class UpdateOrderSerializer(serializers.ModelSerializer):
 
@@ -280,6 +293,9 @@ class CreateOrderSerializer(serializers.Serializer):
                           order.items.create(order_id = order.id,product_id = item.product_id,quantity = item.quantity,unit_price = item.product.unit_price)
 
                      cart.delete()
+  
+                     # fire a signal when a order is created
+                     order_created.send_robust(self.__class__,order = order)
 
                      return order     
                 

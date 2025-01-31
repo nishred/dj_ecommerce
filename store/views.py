@@ -182,11 +182,9 @@ class CartViewSet(
     serializer_class = CartSerializer
 
 
-
 class CartItemViewSet(ModelViewSet):
 
     serializer_class = CartItemSerializer
-
 
     def get_queryset(self):
         cart_id = self.kwargs.get("cart_pk")
@@ -300,11 +298,10 @@ class OrderItemViewSet(ModelViewSet):
                 "error" : str(e)
             })    
 
-class OrderViewSet(ListModelMixin,CreateModelMixin,RetrieveModelMixin,DestroyModelMixin,GenericViewSet):
+class OrderViewSet(ListModelMixin,CreateModelMixin,RetrieveModelMixin,DestroyModelMixin,GenericViewSet,UpdateModelMixin):
 
 
     permission_classes = [IsAuthenticated]
-
 
     def create(self, request, *args, **kwargs):
        serializer = self.get_serializer(data = request.data)
@@ -317,8 +314,23 @@ class OrderViewSet(ListModelMixin,CreateModelMixin,RetrieveModelMixin,DestroyMod
                "success" : True,
                "order" : response_serializer.data
              })
+       
 
+    def update(self, request, *args, **kwargs):
+       
+       instance = self.get_object()
 
+       serializer = OrderSerializer(instance,data = request.data)
+
+       if serializer.is_valid():
+           serializer.save()
+
+           return Response({
+               "success" : True,
+               "order" : serializer.data
+           })
+           
+                  
     def get_serializer_class(self):
         if self.request.method == "PATCH":
             return UpdateOrderSerializer
